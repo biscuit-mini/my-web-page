@@ -1,0 +1,20 @@
+{
+  "events": [
+    {
+      "id": "mo49e689",
+      "visitor": "Michelle",
+      "avatar": "./assets/avatars/michelle.png",
+      "action": "Send me chocolate",
+      "reply": "",
+      "createdAt": 1776512028681
+    },
+    {
+      "id": "mo49huhw",
+      "visitor": "Michelle",
+      "avatar": "./assets/avatars/michelle.png",
+      "action": "Smell my stinky feet",
+      "reply": "",
+      "createdAt": 1776512200100
+    }
+  ]
+}

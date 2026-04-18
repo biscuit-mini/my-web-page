@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Michelle Interactive Page</title>
+    <link rel="stylesheet" href="./styles.css?v=13" />
+  </head>
+  <body>
+    <main class="app" id="app">
+      <!-- 小球装饰 -->
+      <div class="decor-ball" aria-hidden="true">
+        <img src="./assets/decor/ball.png" alt="ball decoration" />
+      </div>
+
+      <h1>Hi, I’m <span id="displayName">Michelle</span> ✨</h1>
+      <p class="subtitle">Leave interaction traces. I can reply, and everyone can see next time.</p>
+
+      <section class="toolbar">
+        <input id="nameInput" type="text" placeholder="Change display name" />
+        <button id="nameBtn" class="small">Update Name</button>
+
+        <label class="upload small">
+          Upload Avatar
+          <input id="avatarInput" type="file" accept="image/*" />
+        </label>
+
+        <button id="musicBtn" class="small">🎵 BGM: Auto...</button>
+      </section>
+
+      <section class="visitor-box">
+        <h3>Visitor</h3>
+        <div id="visitorChoices" class="visitor-choices"></div>
+        <input id="customVisitorInput" type="text" placeholder="Custom visitor name (optional)" />
+      </section>
+
+      <section class="profile" id="profileCard">
+        <div class="avatar-wrap">
+          <img id="avatarImg" class="avatar" src="./assets/avatars/michelle.png" alt="avatar" />
+        </div>
+        <div id="message" class="bubble">Welcome to my page 💖 Have fun interacting with me!</div>
+      </section>
+
+      <section id="actions" class="actions"></section>
+
+      <section class="custom-action">
+        <input id="customActionInput" type="text" placeholder="Type what you want to do to me..." />
+        <button id="customActionBtn">✨ Submit Custom Action</button>
+      </section>
+
+      <p class="count">Interactions: <strong id="count">0</strong></p>
+      <div id="effectLayer" class="effect-layer"></div>
+
+      <section>
+        <h3>Timeline</h3>
+        <ul id="timeline" class="timeline"></ul>
+      </section>
+    </main>
+
+    <audio id="bgmAudio" src="./assets/bgm.mp3" loop preload="auto"></audio>
+    <script src="./main.js?v=13"></script>
+  </body>
+</html>

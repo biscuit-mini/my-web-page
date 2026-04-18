@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: michelle-interactive-page
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: DB_DIR
+        value: /var/data
+    disk:
+      name: michelle-data
+      mountPath: /var/data
+      sizeGB: 1
