@@ -24,17 +24,40 @@ function ensureDb() {
     fs.writeFileSync(DB_FILE, JSON.stringify({ events: [] }, null, 2), "utf-8");
   }
 
-  // Seed only if current DB is empty, so existing latest messages are never overwritten.
+  // Merge seed into current DB (id-dedup, keep newer timestamp) so old/new messages coexist.
   try {
     const current = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
-    if (Array.isArray(current.events) && current.events.length > 0) return;
-
+    const currentEvents = Array.isArray(current?.events) ? current.events : [];
     if (!fs.existsSync(SEED_DB_FILE)) return;
+
     const seedRaw = fs.readFileSync(SEED_DB_FILE, "utf-8");
     const seed = JSON.parse(seedRaw);
-    if (!seed || !Array.isArray(seed.events) || seed.events.length === 0) return;
+    const seedEvents = Array.isArray(seed?.events) ? seed.events : [];
+    if (seedEvents.length === 0) return;
 
-    fs.writeFileSync(DB_FILE, JSON.stringify({ events: seed.events }, null, 2), "utf-8");
+    const ts = (e) => {
+      const raw = e?.createdAt;
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+      if (typeof raw === "string") {
+        const n = Number(raw);
+        if (Number.isFinite(n)) return n;
+        const d = Date.parse(raw);
+        if (Number.isFinite(d)) return d;
+      }
+      return 0;
+    };
+
+    const byId = new Map();
+    for (const e of [...currentEvents, ...seedEvents]) {
+      if (!e || !e.id) continue;
+      const prev = byId.get(e.id);
+      if (!prev || ts(e) >= ts(prev)) byId.set(e.id, e);
+    }
+
+    const mergedEvents = [...byId.values()];
+    if (mergedEvents.length !== currentEvents.length) {
+      fs.writeFileSync(DB_FILE, JSON.stringify({ events: mergedEvents }, null, 2), "utf-8");
+    }
   } catch {
     // Keep DB as-is if read/parse fails.
   }
