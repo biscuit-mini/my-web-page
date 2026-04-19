@@ -21,21 +21,22 @@ app.use(express.static(WEB_ROOT));
 function ensureDb() {
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
   if (!fs.existsSync(DB_FILE)) {
-    let initialDb = { events: [] };
+    fs.writeFileSync(DB_FILE, JSON.stringify({ events: [] }, null, 2), "utf-8");
+  }
 
-    if (fs.existsSync(SEED_DB_FILE)) {
-      try {
-        const seedRaw = fs.readFileSync(SEED_DB_FILE, "utf-8");
-        const seed = JSON.parse(seedRaw);
-        if (seed && Array.isArray(seed.events)) {
-          initialDb = { events: seed.events };
-        }
-      } catch {
-        // Fallback to empty DB if seed is invalid.
-      }
-    }
+  // Seed only if current DB is empty, so existing latest messages are never overwritten.
+  try {
+    const current = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
+    if (Array.isArray(current.events) && current.events.length > 0) return;
 
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), "utf-8");
+    if (!fs.existsSync(SEED_DB_FILE)) return;
+    const seedRaw = fs.readFileSync(SEED_DB_FILE, "utf-8");
+    const seed = JSON.parse(seedRaw);
+    if (!seed || !Array.isArray(seed.events) || seed.events.length === 0) return;
+
+    fs.writeFileSync(DB_FILE, JSON.stringify({ events: seed.events }, null, 2), "utf-8");
+  } catch {
+    // Keep DB as-is if read/parse fails.
   }
 }
 

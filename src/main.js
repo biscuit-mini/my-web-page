@@ -15,6 +15,7 @@ const countLabel = $("countLabel");
 const replyHint = $("replyHint");
 const selectAllBtn = $("selectAllBtn");
 const deleteSelectedBtn = $("deleteSelectedBtn");
+const timelineCollapseBtn = $("timelineCollapseBtn");
 
 const visitorNameInput = $("visitorNameInput");
 const quickNamesEl = $("quickNames");
@@ -102,6 +103,8 @@ const I18N = {
     deselectAll: "Deselect All",
     deleteSelected: "Delete Selected",
     selectItem: "Select this message",
+    showMoreMessages: (n) => `Show more (${n})`,
+    collapseMessages: "Collapse",
     quickNamesHint: "Quick names:",
     quickPhrases: [
       "How was your day?",
@@ -243,6 +246,8 @@ const I18N = {
     deselectAll: "取消全选",
     deleteSelected: "删除已选",
     selectItem: "选择这条留言",
+    showMoreMessages: (n) => `展开更多（${n}）`,
+    collapseMessages: "收起",
     quickNamesHint: "快捷名字：",
     quickPhrases: [
       "今天过得怎么样？",
@@ -374,6 +379,9 @@ let voicePreviewUrl = "";
 let recognizing = false;
 let resumeBgmAfterRecording = false;
 let selectedEventIds = new Set();
+let timelineExpanded = false;
+let timelineEventsCache = [];
+const TIMELINE_COLLAPSE_THRESHOLD = 10;
 
 const ACTION_ANIM_CLASSES = [
   "anim-chocolate",
@@ -435,6 +443,7 @@ function applyLanguage(lang, persist = true) {
   if (replyHint) replyHint.textContent = langText.replyHint;
   if (selectAllBtn) selectAllBtn.textContent = langText.selectAll;
   if (deleteSelectedBtn) deleteSelectedBtn.textContent = langText.deleteSelected;
+  updateTimelineCollapseControl();
 
   if (voiceHint) {
     if (!voiceSupported) {
@@ -703,15 +712,41 @@ function renderActions() {
   });
 }
 
+function getVisibleTimelineEvents(events = timelineEventsCache) {
+  const list = Array.isArray(events) ? events : [];
+  if (timelineExpanded || list.length <= TIMELINE_COLLAPSE_THRESHOLD) {
+    return list;
+  }
+  return list.slice(0, TIMELINE_COLLAPSE_THRESHOLD);
+}
+
+function updateTimelineCollapseControl(events = timelineEventsCache) {
+  if (!timelineCollapseBtn) return;
+  const total = Array.isArray(events) ? events.length : 0;
+  if (total <= TIMELINE_COLLAPSE_THRESHOLD) {
+    timelineCollapseBtn.hidden = true;
+    timelineCollapseBtn.disabled = true;
+    timelineCollapseBtn.textContent = "";
+    return;
+  }
+
+  timelineCollapseBtn.hidden = false;
+  timelineCollapseBtn.disabled = false;
+  const hiddenCount = Math.max(0, total - TIMELINE_COLLAPSE_THRESHOLD);
+  timelineCollapseBtn.textContent = timelineExpanded ? t().collapseMessages : t().showMoreMessages(hiddenCount);
+}
+
 function renderTimeline(events) {
   if (!countEl || !timelineEl) return;
+  timelineEventsCache = Array.isArray(events) ? events : [];
+  const visibleEvents = getVisibleTimelineEvents(timelineEventsCache);
   countEl.textContent = String(events.length);
   const langText = t();
 
-  const validIds = new Set(events.map((e) => e.id));
+  const validIds = new Set(visibleEvents.map((e) => e.id));
   selectedEventIds = new Set(Array.from(selectedEventIds).filter((id) => validIds.has(id)));
 
-  timelineEl.innerHTML = events.map((e) => `
+  timelineEl.innerHTML = visibleEvents.map((e) => `
     <li>
       <div class="timeline-head">
         <img class="timeline-avatar" src="${escapeHtml(e.avatar || "./assets/avatars/michelle.png")}" alt="avatar" onerror="this.src='./assets/avatars/michelle.png'" />
@@ -766,7 +801,7 @@ function renderTimeline(events) {
       if (el.checked) selectedEventIds.add(id);
       else selectedEventIds.delete(id);
       if (selectAllBtn) {
-        const allChecked = events.length > 0 && events.every((evt) => selectedEventIds.has(evt.id));
+        const allChecked = visibleEvents.length > 0 && visibleEvents.every((evt) => selectedEventIds.has(evt.id));
         selectAllBtn.textContent = allChecked ? langText.deselectAll : langText.selectAll;
       }
     });
@@ -788,9 +823,11 @@ function renderTimeline(events) {
   });
 
   if (selectAllBtn) {
-    const allChecked = events.length > 0 && events.every((evt) => selectedEventIds.has(evt.id));
+    const allChecked = visibleEvents.length > 0 && visibleEvents.every((evt) => selectedEventIds.has(evt.id));
     selectAllBtn.textContent = allChecked ? langText.deselectAll : langText.selectAll;
   }
+
+  updateTimelineCollapseControl(timelineEventsCache);
 }
 
 // ---------- api ----------
@@ -1251,15 +1288,22 @@ customActionInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") customActionBtn?.click();
 });
 
+timelineCollapseBtn?.addEventListener("click", () => {
+  timelineExpanded = !timelineExpanded;
+  selectedEventIds.clear();
+  renderTimeline(timelineEventsCache);
+});
+
 selectAllBtn?.addEventListener("click", async () => {
   try {
     const res = await fetch("/api/events");
     if (!res.ok) throw new Error("load failed");
     const events = await res.json();
+    const visibleEvents = getVisibleTimelineEvents(events);
 
-    const allChecked = events.length > 0 && events.every((e) => selectedEventIds.has(e.id));
+    const allChecked = visibleEvents.length > 0 && visibleEvents.every((e) => selectedEventIds.has(e.id));
     if (allChecked) selectedEventIds.clear();
-    else selectedEventIds = new Set(events.map((e) => e.id));
+    else selectedEventIds = new Set(visibleEvents.map((e) => e.id));
 
     renderTimeline(events);
   } catch {

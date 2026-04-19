@@ -603,6 +603,10 @@ h1 {
   font-size: 13px;
 }
 
+#timelineCollapseBtn {
+  margin-bottom: 8px;
+}
+
 .timeline {
   list-style: none;
   padding: 0;
