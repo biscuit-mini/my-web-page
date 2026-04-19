@@ -712,6 +712,22 @@ function renderActions() {
   });
 }
 
+function eventTimestamp(event) {
+  const raw = event?.createdAt;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+    const tValue = Date.parse(raw);
+    if (Number.isFinite(tValue)) return tValue;
+  }
+  return 0;
+}
+
+function sortEventsNewestFirst(events) {
+  return [...(Array.isArray(events) ? events : [])].sort((a, b) => eventTimestamp(b) - eventTimestamp(a));
+}
+
 function getVisibleTimelineEvents(events = timelineEventsCache) {
   const list = Array.isArray(events) ? events : [];
   if (timelineExpanded || list.length <= TIMELINE_COLLAPSE_THRESHOLD) {
@@ -738,9 +754,9 @@ function updateTimelineCollapseControl(events = timelineEventsCache) {
 
 function renderTimeline(events) {
   if (!countEl || !timelineEl) return;
-  timelineEventsCache = Array.isArray(events) ? events : [];
+  timelineEventsCache = sortEventsNewestFirst(events);
   const visibleEvents = getVisibleTimelineEvents(timelineEventsCache);
-  countEl.textContent = String(events.length);
+  countEl.textContent = String(timelineEventsCache.length);
   const langText = t();
 
   const validIds = new Set(visibleEvents.map((e) => e.id));
@@ -836,7 +852,7 @@ async function loadEvents() {
     const res = await fetch("/api/events");
     if (!res.ok) throw new Error("load failed");
     const events = await res.json();
-    renderTimeline(events);
+    renderTimeline(sortEventsNewestFirst(events));
   } catch {
     setStatus(t().statusLoadFailed, true);
   }
@@ -1298,7 +1314,7 @@ selectAllBtn?.addEventListener("click", async () => {
   try {
     const res = await fetch("/api/events");
     if (!res.ok) throw new Error("load failed");
-    const events = await res.json();
+    const events = sortEventsNewestFirst(await res.json());
     const visibleEvents = getVisibleTimelineEvents(events);
 
     const allChecked = visibleEvents.length > 0 && visibleEvents.every((e) => selectedEventIds.has(e.id));

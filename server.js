@@ -54,11 +54,23 @@ function clean(v, max = 200) {
   return String(v ?? "").trim().slice(0, max);
 }
 
+function eventTimestamp(e) {
+  const raw = e?.createdAt;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return n;
+    const t = Date.parse(raw);
+    if (Number.isFinite(t)) return t;
+  }
+  return 0;
+}
+
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
 app.get("/api/events", (_req, res) => {
   const db = readDb();
-  res.json(db.events.sort((a, b) => b.createdAt - a.createdAt));
+  res.json([...(db.events || [])].sort((a, b) => eventTimestamp(b) - eventTimestamp(a)));
 });
 
 app.post("/api/events", (req, res) => {
