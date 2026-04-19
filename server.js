@@ -12,6 +12,7 @@ const PORT = Number(process.env.PORT || 5500);
 // Render 持久化磁盘目录（可被 env 覆盖）
 const DB_DIR = process.env.DB_DIR || path.join(__dirname, "data");
 const DB_FILE = process.env.DB_FILE || path.join(DB_DIR, "db.json");
+const SEED_DB_FILE = process.env.SEED_DB_FILE || path.join(__dirname, "db.json");
 const WEB_ROOT = path.join(__dirname, "src");
 
 app.use(express.json({ limit: "1mb" }));
@@ -20,7 +21,21 @@ app.use(express.static(WEB_ROOT));
 function ensureDb() {
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
   if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({ events: [] }, null, 2), "utf-8");
+    let initialDb = { events: [] };
+
+    if (fs.existsSync(SEED_DB_FILE)) {
+      try {
+        const seedRaw = fs.readFileSync(SEED_DB_FILE, "utf-8");
+        const seed = JSON.parse(seedRaw);
+        if (seed && Array.isArray(seed.events)) {
+          initialDb = { events: seed.events };
+        }
+      } catch {
+        // Fallback to empty DB if seed is invalid.
+      }
+    }
+
+    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), "utf-8");
   }
 }
 
