@@ -29,6 +29,7 @@ const bgmAudio = $("bgmAudio");
 const startVoiceBtn = $("startVoiceBtn");
 const stopVoiceBtn = $("stopVoiceBtn");
 const voiceHint = $("voiceHint");
+const voicePreview = $("voicePreview");
 const langEnBtn = $("langEnBtn");
 const langZhBtn = $("langZhBtn");
 const bgmToggleBtn = $("bgmToggleBtn");
@@ -190,6 +191,10 @@ const I18N = {
     statusVoiceRecording: "Voice recording started.",
     statusVoiceRecorded: "Voice note captured and added to message.",
     statusVoicePermissionDenied: "Microphone permission denied.",
+    statusVoiceRecordFailed: "Voice recording failed.",
+    statusVoiceNeedSecureContext: "Voice recording requires HTTPS or localhost.",
+    statusVoiceNeedMediaDevices: "Your browser does not support microphone devices API.",
+    statusVoiceNeedRecorder: "Your browser does not support MediaRecorder.",
     statusDeleteOneFailed: "Failed to delete message.",
     statusDeleteDone: (n) => `${n} message(s) deleted.`,
     statusDeleteNone: "Please select at least one message.",
@@ -327,6 +332,10 @@ const I18N = {
     statusVoiceRecording: "开始录音了。",
     statusVoiceRecorded: "语音已录制并写入留言框。",
     statusVoicePermissionDenied: "麦克风权限被拒绝。",
+    statusVoiceRecordFailed: "语音录制失败。",
+    statusVoiceNeedSecureContext: "语音录制需要 HTTPS 或 localhost 环境。",
+    statusVoiceNeedMediaDevices: "当前浏览器不支持麦克风设备接口。",
+    statusVoiceNeedRecorder: "当前浏览器不支持 MediaRecorder 录音。",
     statusDeleteOneFailed: "删除留言失败。",
     statusDeleteDone: (n) => `已删除 ${n} 条留言。`,
     statusDeleteNone: "请先勾选至少一条留言。",
@@ -361,6 +370,9 @@ let actionVideoCtx;
 let mediaRecorder;
 let mediaChunks = [];
 let mediaStream;
+let voicePreviewUrl = "";
+let recognizing = false;
+let resumeBgmAfterRecording = false;
 let selectedEventIds = new Set();
 
 const ACTION_ANIM_CLASSES = [
@@ -990,120 +1002,150 @@ function startActionVideoKeying() {
 }
 
 function setupVoiceInput() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const canRecord = !!navigator.mediaDevices?.getUserMedia;
+  const hasMediaDevices = !!navigator.mediaDevices?.getUserMedia;
+  const hasMediaRecorder = typeof window.MediaRecorder !== "undefined";
+  const isSafeOrigin = window.isSecureContext || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const canRecord = hasMediaDevices && hasMediaRecorder && isSafeOrigin;
 
-  const startRecorderFallback = () => {
-    if (!canRecord || listening) return;
+  const syncListeningState = () => {
+    const recording = !!mediaRecorder && mediaRecorder.state !== "inactive";
+    listening = recording || recognizing;
+    if (voiceHint) voiceHint.textContent = listening ? t().voiceListening : t().voiceHint;
+  };
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+  const cleanupMediaStream = () => {
+    mediaStream?.getTracks().forEach((track) => track.stop());
+    mediaStream = undefined;
+  };
+
+  const pauseBgmForRecording = () => {
+    if (!bgmAudio) return;
+    resumeBgmAfterRecording = !bgmAudio.paused;
+    if (resumeBgmAfterRecording) {
+      bgmAudio.pause();
+    }
+  };
+
+  const resumeBgmIfNeeded = async () => {
+    if (!bgmAudio || !resumeBgmAfterRecording) return;
+    resumeBgmAfterRecording = false;
+    try {
+      await bgmAudio.play();
+    } catch {
+      // Autoplay policies may block immediate resume; keep silent failure.
+    }
+  };
+
+  const startRecorder = async () => {
+    if (!canRecord || (mediaRecorder && mediaRecorder.state !== "inactive")) return false;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStream = stream;
       mediaChunks = [];
-      mediaRecorder = new MediaRecorder(stream);
-      listening = true;
-      if (voiceHint) voiceHint.textContent = t().voiceListening;
-      setStatus(t().statusVoiceRecording);
+
+      const mimeCandidates = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+        "audio/ogg;codecs=opus"
+      ];
+      const selectedMime = mimeCandidates.find((m) => window.MediaRecorder.isTypeSupported?.(m));
+      mediaRecorder = selectedMime ? new MediaRecorder(stream, { mimeType: selectedMime }) : new MediaRecorder(stream);
 
       mediaRecorder.ondataavailable = (evt) => {
         if (evt.data && evt.data.size > 0) mediaChunks.push(evt.data);
       };
 
       mediaRecorder.onstop = () => {
-        listening = false;
-        if (voiceHint) voiceHint.textContent = t().voiceHint;
+        if (!mediaChunks.length) {
+          mediaRecorder = undefined;
+          cleanupMediaStream();
+          syncListeningState();
+          resumeBgmIfNeeded();
+          setStatus(t().statusVoiceRecordFailed, true);
+          return;
+        }
 
-        const blob = new Blob(mediaChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        const blob = new Blob(mediaChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
         const secs = Math.max(1, Math.round(blob.size / 16000));
+
+        if (voicePreview) {
+          if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+          voicePreviewUrl = URL.createObjectURL(blob);
+          voicePreview.src = voicePreviewUrl;
+          voicePreview.hidden = false;
+        }
+
         if (messageInput) {
           const note = currentLang === "zh" ? `[语音留言 ${secs}s]` : `[Voice note ${secs}s]`;
           messageInput.value = safeText(`${messageInput.value} ${note}`.trim(), 120);
         }
-        setStatus(t().statusVoiceRecorded);
 
-        mediaStream?.getTracks().forEach((track) => track.stop());
-        mediaStream = undefined;
+        mediaRecorder = undefined;
+        cleanupMediaStream();
+        syncListeningState();
+        resumeBgmIfNeeded();
+        setStatus(t().statusVoiceRecorded);
       };
 
-      mediaRecorder.start();
-    }).catch(() => {
-      setStatus(t().statusVoicePermissionDenied, true);
-    });
+      pauseBgmForRecording();
+      mediaRecorder.start(200);
+      syncListeningState();
+      setStatus(t().statusVoiceRecording);
+      return true;
+    } catch (err) {
+      const denied = err && typeof err === "object" && (err.name === "NotAllowedError" || err.name === "SecurityError");
+      setStatus(denied ? t().statusVoicePermissionDenied : t().statusVoiceRecordFailed, true);
+      cleanupMediaStream();
+      resumeBgmIfNeeded();
+      syncListeningState();
+      return false;
+    }
   };
 
-  if (!SpeechRecognition && !canRecord) {
+  if (!canRecord) {
     voiceSupported = false;
     if (voiceHint) voiceHint.textContent = t().voiceNotSupported;
+
+    if (!isSafeOrigin) {
+      setStatus(t().statusVoiceNeedSecureContext, true);
+    } else if (!hasMediaDevices) {
+      setStatus(t().statusVoiceNeedMediaDevices, true);
+    } else if (!hasMediaRecorder) {
+      setStatus(t().statusVoiceNeedRecorder, true);
+    } else {
+      setStatus(t().voiceNotSupported, true);
+    }
+
     startVoiceBtn?.setAttribute("disabled", "true");
     stopVoiceBtn?.setAttribute("disabled", "true");
     return;
   }
 
   voiceSupported = true;
+  startVoiceBtn?.removeAttribute("disabled");
+  stopVoiceBtn?.removeAttribute("disabled");
 
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = t().speechLang;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    recognition.onstart = () => {
-      listening = true;
-      if (voiceHint) voiceHint.textContent = t().voiceListening;
-      setStatus(t().statusVoiceStarted);
-    };
-
-    recognition.onresult = (event) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      if (!messageInput) return;
-      messageInput.value = safeText(`${messageInput.value} ${transcript}`.trim(), 120);
-    };
-
-    recognition.onerror = (event) => {
-      const fallbackErrors = new Set(["not-allowed", "service-not-allowed", "audio-capture", "network"]);
-      if (fallbackErrors.has(event?.error) && canRecord) {
-        recognition = undefined;
-        startRecorderFallback();
-        return;
-      }
-      if (voiceHint) voiceHint.textContent = t().voiceNotSupported;
-      setStatus(t().statusVoiceFailed, true);
-    };
-
-    recognition.onend = () => {
-      listening = false;
-      if (voiceHint) voiceHint.textContent = t().voiceHint;
-    };
-  }
-
-  startVoiceBtn?.addEventListener("click", () => {
+  startVoiceBtn?.addEventListener("click", async () => {
     if (listening) return;
 
-    if (recognition) {
-      recognition.lang = t().speechLang;
-      try {
-        recognition.start();
-      } catch {
-        recognition = undefined;
-        startRecorderFallback();
-      }
-      return;
+    const recordingStarted = await startRecorder();
+    if (!recordingStarted) {
+      setStatus(t().voiceNotSupported, true);
     }
-
-    startRecorderFallback();
   });
 
   stopVoiceBtn?.addEventListener("click", () => {
     if (!listening) return;
-    if (recognition) {
-      recognition.stop();
-      return;
-    }
+
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
+    } else {
+      resumeBgmIfNeeded();
     }
+
+    syncListeningState();
   });
 }
 

@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans+SC:wght@400;500;700&family=ZCOOL+KuaiLe&family=Caveat:wght@700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css?v=21" />
+    <link rel="stylesheet" href="./styles.css?v=22" />
   </head>
   <body>
     <main class="app" id="app">
@@ -79,6 +79,8 @@
           <span id="voiceHint" class="voice-hint">You can type or use voice input</span>
         </div>
 
+        <audio id="voicePreview" class="voice-preview" controls hidden></audio>
+
         <div id="quickPhrases" class="quick-phrases" aria-label="quick phrases"></div>
 
         <button id="submitMessageBtn" class="primary-btn" type="button">Submit Message</button>
@@ -102,6 +104,6 @@
       <div id="effectLayer" class="effect-layer"></div>
     </main>
     <audio id="bgmAudio" src="./assets/bgm.mp3" loop preload="auto"></audio>
-    <script src="./main.js?v=21"></script>
+    <script src="./main.js?v=24"></script>
   </body>
 </html>
