@@ -849,7 +849,7 @@ function renderTimeline(events) {
 // ---------- api ----------
 async function loadEvents() {
   try {
-    const res = await fetch("/api/events");
+    const res = await fetch(`/api/events?ts=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) throw new Error("load failed");
     const events = await res.json();
     renderTimeline(sortEventsNewestFirst(events));
@@ -1312,7 +1312,7 @@ timelineCollapseBtn?.addEventListener("click", () => {
 
 selectAllBtn?.addEventListener("click", async () => {
   try {
-    const res = await fetch("/api/events");
+    const res = await fetch(`/api/events?ts=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) throw new Error("load failed");
     const events = sortEventsNewestFirst(await res.json());
     const visibleEvents = getVisibleTimelineEvents(events);
