@@ -10,7 +10,9 @@ const app = express();
 const PORT = Number(process.env.PORT || 5500);
 
 // Render 持久化磁盘目录（可被 env 覆盖）
-const DB_DIR = process.env.DB_DIR || path.join(__dirname, "data");
+const RENDER_PERSIST_DIR = "/var/data";
+const defaultDbDir = fs.existsSync(RENDER_PERSIST_DIR) ? RENDER_PERSIST_DIR : path.join(__dirname, "data");
+const DB_DIR = process.env.DB_DIR || defaultDbDir;
 const DB_FILE = process.env.DB_FILE || path.join(DB_DIR, "db.json");
 const SEED_DB_FILE = process.env.SEED_DB_FILE || path.join(__dirname, "db.json");
 const WEB_ROOT = path.join(__dirname, "src");
