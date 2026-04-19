@@ -82,6 +82,38 @@ app.patch("/api/events/:id/reply", (req, res) => {
   res.json(found);
 });
 
+app.delete("/api/events/batch", (req, res) => {
+  const db = readDb();
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  const cleanIds = ids.map((v) => clean(v, 60)).filter(Boolean);
+  if (cleanIds.length === 0) return res.status(400).json({ error: "ids required" });
+
+  const idSet = new Set(cleanIds);
+  const before = db.events.length;
+  db.events = db.events.filter((e) => !idSet.has(e.id));
+  const removed = before - db.events.length;
+
+  writeDb(db);
+  res.json({ ok: true, removed });
+});
+
+app.delete("/api/events/:id", (req, res) => {
+  const db = readDb();
+  const id = clean(req.params.id, 60);
+  const before = db.events.length;
+  db.events = db.events.filter((e) => e.id !== id);
+  if (db.events.length === before) return res.status(404).json({ error: "not found" });
+  writeDb(db);
+  res.json({ ok: true });
+});
+
+app.delete("/api/events", (_req, res) => {
+  const db = readDb();
+  db.events = [];
+  writeDb(db);
+  res.json({ ok: true, count: 0 });
+});
+
 app.get("*", (_req, res) => {
   res.sendFile(path.join(WEB_ROOT, "index.html"));
 });
