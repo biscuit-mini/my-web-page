@@ -96,11 +96,47 @@ function eventTimestamp(e) {
   return 0;
 }
 
+function sortEventsNewestFirst(events) {
+  return [...(Array.isArray(events) ? events : [])].sort((a, b) => eventTimestamp(b) - eventTimestamp(a));
+}
+
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
 app.get("/api/events", (_req, res) => {
   const db = readDb();
-  res.json([...(db.events || [])].sort((a, b) => eventTimestamp(b) - eventTimestamp(a)));
+  res.json(sortEventsNewestFirst(db.events || []));
+});
+
+app.get("/api/debug/db-info", (_req, res) => {
+  const db = readDb();
+  const events = sortEventsNewestFirst(db.events || []);
+  const newest = events[0] || null;
+  const oldest = events.length > 0 ? events[events.length - 1] : null;
+
+  res.json({
+    ok: true,
+    dbFile: DB_FILE,
+    seedDbFile: SEED_DB_FILE,
+    totalEvents: events.length,
+    newest: newest
+      ? {
+          id: newest.id,
+          createdAt: newest.createdAt,
+          createdAtIso: new Date(eventTimestamp(newest)).toISOString(),
+          visitor: newest.visitor,
+          action: newest.action
+        }
+      : null,
+    oldest: oldest
+      ? {
+          id: oldest.id,
+          createdAt: oldest.createdAt,
+          createdAtIso: new Date(eventTimestamp(oldest)).toISOString(),
+          visitor: oldest.visitor,
+          action: oldest.action
+        }
+      : null
+  });
 });
 
 app.post("/api/events", (req, res) => {
